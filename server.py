@@ -1,8 +1,8 @@
+from os import path
 from aiohttp import web
 import aiofiles
 import asyncio
 import datetime
-import time
 
 
 INTERVAL_SECS = 1
@@ -34,6 +34,9 @@ async def uptime_handler(request):
 async def archivate(request):
     archive_hash = request.match_info.get('archive_hash', "7kna")
     print(f'ARCH_HASH: {archive_hash}')
+    print(path.exists(f'{SERVER_DIR}{archive_hash}'))
+    if not path.exists(f'{SERVER_DIR}{archive_hash}'):
+        raise web.HTTPNotFound(text="Sorry. Archive you are asking for doesn't exist or was deleted")
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'application/octet-stream'
     response.headers['Content-Disposition'] = f'attachment; filename="{archive_hash}.zip"'
@@ -50,10 +53,10 @@ async def archivate(request):
     iteration = 0
     while True:
         iteration += 1
-        stdout = await process.stdout.read(25000)
+        stdout = await process.stdout.read(50000)
         if process.stdout.at_eof():
             break
-        print(f'ITERATION: {iteration}, BITES: {stdout}')
+        # print(f'ITERATION: {iteration}, BITES: {stdout}')
         file.write(stdout)
         await response.write(stdout)
 
