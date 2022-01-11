@@ -3,6 +3,7 @@ from aiohttp import web
 import aiofiles
 import asyncio
 import datetime
+import logging
 
 
 INTERVAL_SECS = 1
@@ -10,6 +11,9 @@ DIR = '/home/andrey/5_My_projects/Dvmn/photozip/'
 SERVER_DIR = f'{DIR}async-download-service/test_photos/'
 TEST_DIR = f'{DIR}Dvmn/'
 
+logging.basicConfig(
+    format=u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s',
+    level=logging.DEBUG)
 
 async def uptime_handler(request):
     response = web.StreamResponse()
@@ -33,9 +37,11 @@ async def uptime_handler(request):
 
 async def archivate(request):
     archive_hash = request.match_info.get('archive_hash', "7kna")
-    print(f'ARCH_HASH: {archive_hash}')
-    print(path.exists(f'{SERVER_DIR}{archive_hash}'))
+    logging.debug(f'ARCH_HASH: {archive_hash}')
+    path_exists = path.exists(f'{SERVER_DIR}{archive_hash}')
+    logging.debug(f'Path exists: {path_exists}')
     if not path.exists(f'{SERVER_DIR}{archive_hash}'):
+        logging.error("Path doesn't exist")
         raise web.HTTPNotFound(text="Sorry. Archive you are asking for doesn't exist or was deleted")
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'application/octet-stream'
@@ -53,10 +59,10 @@ async def archivate(request):
     iteration = 0
     while True:
         iteration += 1
-        stdout = await process.stdout.read(50000)
+        stdout = await process.stdout.read(250000)
         if process.stdout.at_eof():
             break
-        # print(f'ITERATION: {iteration}, BITES: {stdout}')
+        logging.debug(f'Sending archive chunk ... iteration: {iteration}, bites: {len(stdout)}')
         file.write(stdout)
         await response.write(stdout)
 
