@@ -47,6 +47,7 @@ async def archivate(request):
     response.headers['Content-Type'] = 'application/octet-stream'
     response.headers['Content-Disposition'] = f'attachment; filename="{archive_hash}.zip"'
 
+    # Отправляет клиенту HTTP заголовки
     await response.prepare(request)
 
     process = await asyncio.create_subprocess_shell(
@@ -57,17 +58,30 @@ async def archivate(request):
     file = open(f'{TEST_DIR}{archive_hash}.zip', 'w+b')
     file.seek(0)
     iteration = 0
-    while True:
-        iteration += 1
-        stdout = await process.stdout.read(250000)
-        if process.stdout.at_eof():
-            break
-        logging.debug(f'Sending archive chunk ... iteration: {iteration}, bites: {len(stdout)}')
-        file.write(stdout)
-        await response.write(stdout)
 
-    await response.write_eof()
-    file.close()
+    try:
+        while True:
+            iteration += 1
+            stdout = await process.stdout.read(250000)
+            if process.stdout.at_eof():
+                break
+            logging.debug(f'Sending archive chunk ... iteration: {iteration}, bites: {len(stdout)}')
+            file.write(stdout)
+            # Отправляет клиенту очередную порцию ответа
+            await response.write(stdout)
+            # Пауза для проверки разрыва соединения по инициативе клиента
+            await asyncio.sleep(1)
+
+    except asyncio.CancelledError:
+        logging.debug('Download was interrupted')
+        # отпускаем перехваченный CancelledError
+        raise
+
+    finally:
+        # закрывать файл и соединение даже в случае ошибки
+        await response.write_eof()
+        file.close()
+
     return response
 
 
