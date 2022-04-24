@@ -1,4 +1,4 @@
-from os import path
+from os import path, getpgid
 from aiohttp import web
 import aiofiles
 import asyncio
@@ -15,10 +15,12 @@ logging.basicConfig(
     format=u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s',
     level=logging.DEBUG)
 
+
 async def uptime_handler(request):
     response = web.StreamResponse()
 
-    # Большинство браузеров не отрисовывают частично загруженный контент, только если это не HTML.
+    # Большинство браузеров не отрисовывают частично загруженный контент,
+    # только если это не HTML.
     # Поэтому отправляем клиенту именно HTML, указываем это в Content-Type.
     response.headers['Content-Type'] = 'text/html'
 
@@ -40,9 +42,10 @@ async def archivate(request):
     logging.debug(f'ARCH_HASH: {archive_hash}')
     path_exists = path.exists(f'{SERVER_DIR}{archive_hash}')
     logging.debug(f'Path exists: {path_exists}')
-    if not path.exists(f'{SERVER_DIR}{archive_hash}'):
+    if not path_exists:
         logging.error("Path doesn't exist")
-        raise web.HTTPNotFound(text="Sorry. Archive you are asking for doesn't exist or was deleted")
+        raise web.HTTPNotFound(
+            text="Sorry. Archive you are asking for doesn't exist or was deleted")
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'application/octet-stream'
     response.headers['Content-Disposition'] = f'attachment; filename="{archive_hash}.zip"'
@@ -51,7 +54,7 @@ async def archivate(request):
     await response.prepare(request)
 
     process = await asyncio.create_subprocess_shell(
-        f'zip -rj - {SERVER_DIR}{archive_hash}',
+        f'exec zip -rj - {SERVER_DIR}{archive_hash}',
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE)
 
@@ -65,22 +68,26 @@ async def archivate(request):
             stdout = await process.stdout.read(250000)
             if process.stdout.at_eof():
                 break
-            logging.debug(f'Sending archive chunk ... iteration: {iteration}, bites: {len(stdout)}')
+            logging.debug(
+                f'Sending archive chunk ... iteration:\
+                {iteration}, bites: {len(stdout)}')
             file.write(stdout)
             # Отправляет клиенту очередную порцию ответа
             await response.write(stdout)
             # Пауза для проверки разрыва соединения по инициативе клиента
             await asyncio.sleep(1)
 
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, SystemExit):
         logging.debug('Download was interrupted')
+        print(process.pid, getpgid(process.pid))
         # отпускаем перехваченный CancelledError
         raise
 
     finally:
-        # закрывать файл и соединение даже в случае ошибки
+        # закрывать файл и соединение, останавливать дочерний процесс даже в случае ошибки
         await response.write_eof()
         file.close()
+        process.terminate()
 
     return response
 
