@@ -83,7 +83,6 @@ async def archivate(request):
 
     except (asyncio.CancelledError, SystemExit):
         logging.debug('Download was interrupted')
-        print(process.pid, getpgid(process.pid))
         # отпускаем перехваченный CancelledError
         raise
 
@@ -126,7 +125,6 @@ if __name__ == '__main__':
             help='turn on pause between packages to emulate slow connection'
             )
     args = parser.parse_args()
-    print(args)
 
     global is_throttling_on
     is_throttling_on = args.throttling
@@ -152,7 +150,7 @@ if __name__ == '__main__':
         format=LOG_FORMAT,
         level=LOG_LEVEL)
 
-    logging.debug("This is debug log message")
+    logging.debug("Log level DEBUG is on")
 
     app = web.Application()
     app.add_routes([
