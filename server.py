@@ -8,8 +8,8 @@ import logging
 
 INTERVAL_SECS = 1
 DIR = '/home/andrey/5_My_projects/Dvmn/photozip/'
-SERVER_DIR = f'{DIR}async-download-service/test_photos/'
 TEST_DIR = f'{DIR}Dvmn/'
+SERVER_DIR = f'{DIR}async-download-service/test_photos/'
 
 logging.basicConfig(
     format=u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s',
@@ -84,10 +84,12 @@ async def archivate(request):
         raise
 
     finally:
-        # закрывать файл и соединение, останавливать дочерний процесс даже в случае ошибки
+        # закрывать файл и соединение,
+        # останавливать дочерний процесс даже в случае ошибки
         await response.write_eof()
         file.close()
         process.terminate()
+        _ = await process.communicate()
 
     return response
 
@@ -105,4 +107,5 @@ if __name__ == '__main__':
         web.get('/archive/{archive_hash}/', archivate),
         web.get('/uptime/', uptime_handler),
     ])
+    # try:
     web.run_app(app)
