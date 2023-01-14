@@ -9,7 +9,8 @@ import argparse
 
 
 INTERVAL_SECS = 1
-DIR = '/home/andrey/5_My_projects/Dvmn/photozip/'
+HOME = getenv("HOME")
+DIR = f'{HOME}/5_My_projects/Dvmn/photozip/'
 TEST_DIR = f'{DIR}Dvmn/'
 SERVER_DIR = f'{DIR}async-download-service/test_photos/'
 LOG_LEVEL = logging.WARNING
