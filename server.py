@@ -3,46 +3,28 @@ from sys import exit
 from aiohttp import web
 import aiofiles
 import asyncio
-import datetime
 import logging
 import argparse
 
 
 INTERVAL_SECS = 1
-LOG_FORMAT = u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
-
-
-async def uptime_handler(request):
-    response = web.StreamResponse()
-
-    # Большинство браузеров не отрисовывают частично загруженный контент,
-    # только если это не HTML.
-    # Поэтому отправляем клиенту именно HTML, указываем это в Content-Type.
-    response.headers['Content-Type'] = 'text/html'
-
-    # Отправляет клиенту HTTP заголовки
-    await response.prepare(request)
-
-    while True:
-        formatted_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        message = f'{formatted_date}<br>'  # <br> — HTML тег переноса строки
-
-        # Отправляет клиенту очередную порцию ответа
-        await response.write(message.encode('utf-8'))
-
-        await asyncio.sleep(INTERVAL_SECS)
+LOG_FORMAT = '%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
 
 
 async def archivate(request):
-    archive_hash = request.match_info.get('archive_hash', "7kna")
-    logging.debug(f'ARCH_HASH: {archive_hash}')
-
+    archive_hash = request.match_info.get('archive_hash')
+    if not archive_hash:
+        logging.error("Archive hash wasn't provided")
+        raise web.HTTPNotFound(
+            text="Please provide correct link to archive to download"
+        )
     path_exists = path.exists(f'{archive_path}{archive_hash}')
     if not path_exists:
-        logging.error("Path doesn't exist")
+        logging.error("Path {archive_path} doesn't exist")
         raise web.HTTPNotFound(
-            text="Sorry. Archive you are asking for doesn't exist")
-    logging.debug(f'Path exists: {path_exists}')
+            text="Sorry. Archive you are asking for doesn't exist"
+        )
+    logging.debug(f'Path {archive_path} exists: {path_exists}')
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'application/octet-stream'
     content_disposition = f'attachment; filename="{archive_hash}.zip"'
@@ -54,7 +36,8 @@ async def archivate(request):
     process = await asyncio.create_subprocess_shell(
         f'exec zip -rj - {archive_path}{archive_hash}',
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
+        stderr=asyncio.subprocess.PIPE
+    )
 
     file = open(f'{control_path}{archive_hash}.zip', 'w+b')
     file.seek(0)
@@ -68,7 +51,8 @@ async def archivate(request):
                 break
             logging.debug(
                 f'Sending archive chunk ... iteration:\
-                {iteration}, bites: {len(stdout)}')
+                {iteration}, bites: {len(stdout)}'
+            )
             file.write(stdout)
             # Отправляет клиенту очередную порцию ответа
             await response.write(stdout)
@@ -101,24 +85,25 @@ async def handle_index_page(request):
 def parse_arguments():
 
     parser = argparse.ArgumentParser(
-            description='Web-server for downloading photoarchives')
+        description='Web-server for downloading photoarchives'
+    )
     parser.add_argument(
-            'path',
-            nargs='?',
-            help='path to the directory with photoarchives'
-            )
+        'path',
+        nargs='?',
+        help='path to the directory with photoarchives'
+    )
     parser.add_argument(
-            '-l',
-            '--logging',
-            action='store_true',
-            help='turn on detailed logging'
-            )
+        '-l',
+        '--logging',
+        action='store_true',
+        help='turn on detailed logging'
+    )
     parser.add_argument(
-            '-t',
-            '--throttling',
-            action='store_true',
-            help='turn on pause between packages to emulate slow connection'
-            )
+        '-t',
+        '--throttling',
+        action='store_true',
+        help='turn on pause between packages to emulate slow connection'
+    )
     args = parser.parse_args()
 
     return args
@@ -156,7 +141,6 @@ def main():
     app.add_routes([
         web.get('/', handle_index_page),
         web.get('/archive/{archive_hash}/', archivate),
-        web.get('/uptime/', uptime_handler),
     ])
     web.run_app(app)
 
