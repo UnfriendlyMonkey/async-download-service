@@ -33,27 +33,32 @@ async def archivate(request):
     # Отправляет клиенту HTTP заголовки
     await response.prepare(request)
 
-    process = await asyncio.create_subprocess_shell(
-        f'exec zip -rj - {archive_path}{archive_hash}',
+    # process = await asyncio.create_subprocess_shell(
+    #     f'exec zip -rj - {archive_path}{archive_hash}',
+    #     stdout=asyncio.subprocess.PIPE,
+    #     stderr=asyncio.subprocess.PIPE
+    # )
+    process = await asyncio.create_subprocess_exec(
+        'zip',
+        '-r',
+        '-',
+        f'{archive_path}{archive_hash}',
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
 
-    file = open(f'{control_path}{archive_hash}.zip', 'w+b')
-    file.seek(0)
     iteration = 0
-
     try:
         while True:
             iteration += 1
             stdout = await process.stdout.read(250000)
             if process.stdout.at_eof():
+                logging.debug("EOF")
                 break
             logging.debug(
                 f'Sending archive chunk ... iteration:\
                 {iteration}, bites: {len(stdout)}'
             )
-            file.write(stdout)
             # Отправляет клиенту очередную порцию ответа
             await response.write(stdout)
             # Пауза для проверки разрыва соединения по инициативе клиента
@@ -66,12 +71,12 @@ async def archivate(request):
         raise
 
     finally:
-        # закрывать файл и соединение,
+        # закрывать соединение,
         # останавливать дочерний процесс даже в случае ошибки
         await response.write_eof()
-        file.close()
-        process.terminate()
-        _ = await process.communicate()
+        if process.returncode is None:
+            process.terminate()
+        await process.communicate()
 
     return response
 
@@ -90,7 +95,7 @@ def parse_arguments():
     parser.add_argument(
         'path',
         nargs='?',
-        help='path to the directory with photoarchives'
+        help='absolute path to the directory with photoarchives'
     )
     parser.add_argument(
         '-l',
@@ -116,14 +121,9 @@ def main():
     is_throttling_on = args.throttling
 
     global archive_path
-    global control_path
     module_path = path.dirname(path.abspath(__file__))
-    control_path = f'{module_path}/control_files/'
     if args.path:
-        if args.path.startswith('/'):
-            archive_path = args.path
-        else:
-            archive_path = f'{getenv("PWD")}/{args.path}'
+        archive_path = args.path
         if not archive_path.endswith('/'):
             archive_path += '/'
     else:
