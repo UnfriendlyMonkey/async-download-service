@@ -5,13 +5,14 @@ import aiofiles
 import asyncio
 import logging
 import argparse
+from functools import partial
 
 
 INTERVAL_SECS = 1
 LOG_FORMAT = '%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
 
 
-async def archivate(request):
+async def archivate(request, archive_path, is_throttling_on=False):
     archive_hash = request.match_info.get('archive_hash')
     if not archive_hash:
         logging.error("Archive hash wasn't provided")
@@ -20,11 +21,11 @@ async def archivate(request):
         )
     path_exists = path.exists(f'{archive_path}{archive_hash}')
     if not path_exists:
-        logging.error("Path {archive_path} doesn't exist")
+        logging.error("Path {archive_path}{archive_hash} doesn't exist")
         raise web.HTTPNotFound(
             text="Sorry. Archive you are asking for doesn't exist"
         )
-    logging.debug(f'Path {archive_path} exists: {path_exists}')
+    logging.debug(f'Path {archive_path}{archive_hash} exists')
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'application/octet-stream'
     content_disposition = f'attachment; filename="{archive_hash}.zip"'
@@ -33,11 +34,6 @@ async def archivate(request):
     # Отправляет клиенту HTTP заголовки
     await response.prepare(request)
 
-    # process = await asyncio.create_subprocess_shell(
-    #     f'exec zip -rj - {archive_path}{archive_hash}',
-    #     stdout=asyncio.subprocess.PIPE,
-    #     stderr=asyncio.subprocess.PIPE
-    # )
     process = await asyncio.create_subprocess_exec(
         'zip',
         '-r',
@@ -117,10 +113,8 @@ def parse_arguments():
 def main():
     args = parse_arguments()
 
-    global is_throttling_on
     is_throttling_on = args.throttling
 
-    global archive_path
     module_path = path.dirname(path.abspath(__file__))
     if args.path:
         archive_path = args.path
@@ -138,9 +132,14 @@ def main():
     logging.debug("Log level DEBUG is on")
 
     app = web.Application()
+    handle_archivation = partial(
+        archivate,
+        archive_path=archive_path,
+        is_throttling_on=is_throttling_on
+    )
     app.add_routes([
         web.get('/', handle_index_page),
-        web.get('/archive/{archive_hash}/', archivate),
+        web.get('/archive/{archive_hash}/', handle_archivation),
     ])
     web.run_app(app)
 
