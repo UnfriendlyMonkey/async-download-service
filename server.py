@@ -1,4 +1,4 @@
-from os import path, getpgid, getenv
+from os import path, getenv
 from sys import exit
 from aiohttp import web
 import aiofiles
@@ -9,11 +9,6 @@ import argparse
 
 
 INTERVAL_SECS = 1
-HOME = getenv("HOME")
-DIR = f'{HOME}/5_My_projects/Dvmn/photozip/'
-TEST_DIR = f'{DIR}Dvmn/'
-SERVER_DIR = f'{DIR}async-download-service/test_photos/'
-LOG_LEVEL = logging.WARNING
 LOG_FORMAT = u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
 
 
@@ -57,11 +52,11 @@ async def archivate(request):
     await response.prepare(request)
 
     process = await asyncio.create_subprocess_shell(
-        f'exec zip -rj - {SERVER_DIR}{archive_hash}',
+        f'exec zip -rj - {archive_path}{archive_hash}',
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE)
 
-    file = open(f'{TEST_DIR}{archive_hash}.zip', 'w+b')
+    file = open(f'{control_path}{archive_hash}.zip', 'w+b')
     file.seek(0)
     iteration = 0
 
@@ -103,7 +98,7 @@ async def handle_index_page(request):
     return web.Response(text=index_contents, content_type='text/html')
 
 
-if __name__ == '__main__':
+def parse_arguments():
 
     parser = argparse.ArgumentParser(
             description='Web-server for downloading photoarchives')
@@ -126,10 +121,19 @@ if __name__ == '__main__':
             )
     args = parser.parse_args()
 
+    return args
+
+
+def main():
+    args = parse_arguments()
+
     global is_throttling_on
     is_throttling_on = args.throttling
 
     global archive_path
+    global control_path
+    module_path = path.dirname(path.abspath(__file__))
+    control_path = f'{module_path}/control_files/'
     if args.path:
         if args.path.startswith('/'):
             archive_path = args.path
@@ -138,18 +142,14 @@ if __name__ == '__main__':
         if not archive_path.endswith('/'):
             archive_path += '/'
     else:
-        archive_path = SERVER_DIR
+        archive_path = f'{module_path}/test_photos/'
 
     if not path.exists(archive_path):
         logging.error("Provided path doesn't exist")
         exit(1)
 
-    if args.logging:
-        LOG_LEVEL = logging.DEBUG
-    logging.basicConfig(
-        format=LOG_FORMAT,
-        level=LOG_LEVEL)
-
+    log_level = logging.DEBUG if args.logging else logging.WARNING
+    logging.basicConfig(format=LOG_FORMAT, level=log_level)
     logging.debug("Log level DEBUG is on")
 
     app = web.Application()
@@ -159,3 +159,7 @@ if __name__ == '__main__':
         web.get('/uptime/', uptime_handler),
     ])
     web.run_app(app)
+
+
+if __name__ == '__main__':
+    main()
