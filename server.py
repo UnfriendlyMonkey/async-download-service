@@ -12,7 +12,7 @@ INTERVAL_SECS = 1
 LOG_FORMAT = '%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
 
 
-async def archivate(request, archive_path, is_throttling_on=False):
+async def archivate(request, archive_path, throttling=False):
     archive_hash = request.match_info.get('archive_hash')
     if not archive_hash:
         logging.error("Archive hash wasn't provided")
@@ -58,7 +58,7 @@ async def archivate(request, archive_path, is_throttling_on=False):
             # Отправляет клиенту очередную порцию ответа
             await response.write(stdout)
             # Пауза для проверки разрыва соединения по инициативе клиента
-            if is_throttling_on:
+            if throttling:
                 await asyncio.sleep(INTERVAL_SECS)
 
     except (asyncio.CancelledError, SystemExit):
@@ -84,7 +84,6 @@ async def handle_index_page(request):
 
 
 def parse_arguments():
-
     parser = argparse.ArgumentParser(
         description='Web-server for downloading photoarchives'
     )
@@ -112,8 +111,7 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
-
-    is_throttling_on = args.throttling
+    throttling = args.throttling
 
     module_path = path.dirname(path.abspath(__file__))
     if args.path:
@@ -135,7 +133,7 @@ def main():
     handle_archivation = partial(
         archivate,
         archive_path=archive_path,
-        is_throttling_on=is_throttling_on
+        throttling=throttling
     )
     app.add_routes([
         web.get('/', handle_index_page),
