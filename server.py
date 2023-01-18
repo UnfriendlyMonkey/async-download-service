@@ -13,12 +13,7 @@ LOG_FORMAT = '%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(me
 
 
 async def archivate(request, archive_path, throttling=False):
-    archive_hash = request.match_info.get('archive_hash')
-    if not archive_hash:
-        logging.error("Archive hash wasn't provided")
-        raise web.HTTPNotFound(
-            text="Please provide correct link to archive to download"
-        )
+    archive_hash = request.match_info['archive_hash']
     path_exists = path.exists(f'{archive_path}{archive_hash}')
     if not path_exists:
         logging.error("Path {archive_path}{archive_hash} doesn't exist")
@@ -70,8 +65,10 @@ async def archivate(request, archive_path, throttling=False):
         # закрывать соединение,
         # останавливать дочерний процесс даже в случае ошибки
         await response.write_eof()
-        if process.returncode is None:
+        try:
             process.terminate()
+        except ProcessLookupError:
+            pass
         await process.communicate()
 
     return response
