@@ -6,6 +6,7 @@ import asyncio
 import logging
 import argparse
 from functools import partial
+from contextlib import suppress
 
 
 INTERVAL_SECS = 1
@@ -65,10 +66,8 @@ async def archivate(request, archive_path, throttling=False):
         # закрывать соединение,
         # останавливать дочерний процесс даже в случае ошибки
         await response.write_eof()
-        try:
+        with suppress(ProcessLookupError):
             process.terminate()
-        except ProcessLookupError:
-            pass
         await process.communicate()
 
     return response
